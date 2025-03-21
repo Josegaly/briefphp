@@ -1,17 +1,23 @@
 <?php
 require_once __DIR__ . '/../models/User.php';
 require_once __DIR__ . '/../models/JWT.php';
+require_once __DIR__ . '/../models/Role.php';
+require_once __DIR__ . '/../models/Session.php';
 require_once __DIR__ . '/../models/Security.php';
 
 class AuthController {
     private $pdo;
     private $userModel;
     private $jwt;
+    private $roleModel;
+    private $sessionModel;
 
     public function __construct($pdo) {
         $this->pdo = $pdo;
         $this->userModel = new User($pdo);
         $this->jwt = new JWT();
+        $this->roleModel = new Role($pdo);
+        $this->sessionModel = new Session($pdo);
     }
 
     public function register() {
@@ -27,8 +33,13 @@ class AuthController {
             $password = $_POST['password'];
 
             $result = $this->userModel->register($username, $email, $password);
-            header("Location: /register?" . ($result['success'] ? "success=" : "error=") . urlencode($result['message']));
-            exit;
+            if ($result['success']) {
+                header("Location: /verify-2fa?user_id=" . $result['user_id']);
+                exit;
+            } else {
+                header("Location: /register?error=" . urlencode($result['message']));
+                exit;
+            }
         }
         require __DIR__ . '/../views/register.php';
     }
@@ -41,55 +52,112 @@ class AuthController {
                 exit;
             }
 
-            if (isset($_POST['twofa_code'])) {
-                // Étape 2FA
-                $userId = (int)$_POST['user_id'];
-                $twofaCode = Security::sanitizeInput($_POST['twofa_code']);
-                $result = $this->userModel->verify2FACode($userId, $twofaCode);
+            $username = Security::sanitizeInput($_POST['username']);
+            $password = $_POST['password'];
 
-                if ($result['success']) {
-                    $stmt = $this->pdo->prepare("SELECT * FROM users WHERE id = :id");
-                    $stmt->execute(['id' => $userId]);
-                    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            $result = $this->userModel->login($username, $password);
+            if ($result['success']) {
+                $token = $this->jwt->generateToken([
+                    'user_id' => $result['user']['id'],
+                    'role_id' => $result['user']['role_id']
+                ]);
+                setcookie('token', $token, time() + 3600, '/', '', true, true);
 
-                    $token = $this->jwt->generateToken([
-                        'user_id' => $user['id'],
-                        'role_id' => $user['role_id']
-                    ]);
-                    setcookie('token', $token, time() + 3600, '/', '', true, true);
+                $_SESSION['user_id'] = $result['user']['id'];
+                $_SESSION['role_id'] = $result['user']['role_id'];
 
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['role_id'] = $user['role_id'];
-                    header("Location: /dashboard");
-                    exit;
+                $this->sessionModel->logAction($result['user']['id'], "login");
+
+                // Redirection selon le rôle
+                if ($result['user']['role_id'] == 1) {
+                    header("Location: /dashboard"); // Admin vers dashboard
                 } else {
-                    header("Location: /login?step=2fa&user_id=$userId&error=" . urlencode($result['message']));
-                    exit;
+                    header("Location: /profile"); // Client vers profile
                 }
+                exit;
             } else {
-                // Étape identifiants
-                $username = Security::sanitizeInput($_POST['username']);
-                $password = $_POST['password'];
-
-                $result = $this->userModel->login($username, $password);
-                if ($result['success']) {
-                    $twofaResult = $this->userModel->generate2FACode($result['user']['id']);
-                    if ($twofaResult['success']) {
-                        echo "Code 2FA (simulé) : " . $twofaResult['code']; // À remplacer par un email réel
-                        header("Location: /login?step=2fa&user_id=" . $result['user']['id']);
-                        exit;
-                    } else {
-                        header("Location: /login?error=" . urlencode($twofaResult['message']));
-                        exit;
-                    }
-                } else {
-                    header("Location: /login?error=" . urlencode($result['message']));
-                    exit;
-                }
+                header("Location: /login?error=" . urlencode($result['message']));
+                exit;
             }
         }
         require __DIR__ . '/../views/login.php';
     }
-}?>
 
+    public function logout() {
+        session_start();
+        if (isset($_SESSION['user_id'])) {
+            $this->sessionModel->logLogout($_SESSION['user_id']);
+            session_destroy();
+            setcookie('token', '', time() - 3600, '/', '', true, true);
+        }
+        header("Location: /login?success=Déconnexion réussie");
+        exit;
+    }
 
+    public function verify2FA() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $csrfResult = Security::verifyCSRFToken($_POST['csrf_token']);
+            if (!$csrfResult['success']) {
+                header("Location: /verify-2fa?user_id=" . $_POST['user_id'] . "&error=" . urlencode($csrfResult['message']));
+                exit;
+            }
+
+            $userId = (int)$_POST['user_id'];
+            $twofaCode = Security::sanitizeInput($_POST['twofa_code']);
+            $result = $this->userModel->verify2FACode($userId, $twofaCode);
+
+            if ($result['success']) {
+                $activationResult = $this->userModel->activateAccount($userId);
+                if ($activationResult['success']) {
+                    header("Location: /login?success=Compte activé, connectez-vous.");
+                    exit;
+                } else {
+                    header("Location: /verify-2fa?user_id=$userId&error=" . urlencode($activationResult['message']));
+                    exit;
+                }
+            } else {
+                if (isset($result['new_code'])) {
+                    echo "Nouveau code 2FA (simulé) : " . $result['new_code'];
+                }
+                header("Location: /verify-2fa?user_id=$userId&error=" . urlencode($result['message']));
+                exit;
+            }
+        }
+        require __DIR__ . '/../views/verification.php';
+    }
+
+    public function adminLogin() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $csrfResult = Security::verifyCSRFToken($_POST['csrf_token']);
+            if (!$csrfResult['success']) {
+                header("Location: /admin-login?error=" . urlencode($csrfResult['message']));
+                exit;
+            }
+
+            $username = Security::sanitizeInput($_POST['username']);
+            $password = $_POST['password'];
+
+            $result = $this->userModel->login($username, $password);
+            if ($result['success'] && $result['user']['role_id'] == 1) {
+                $token = $this->jwt->generateToken([
+                    'user_id' => $result['user']['id'],
+                    'role_id' => $result['user']['role_id']
+                ]);
+                setcookie('token', $token, time() + 3600, '/', '', true, true);
+
+                $_SESSION['user_id'] = $result['user']['id'];
+                $_SESSION['role_id'] = $result['user']['role_id'];
+
+                $this->sessionModel->logAction($result['user']['id'], "login");
+
+                header("Location: /dashboard");
+                exit;
+            } else {
+                header("Location: /admin-login?error=" . urlencode("Accès réservé aux administrateurs."));
+                exit;
+            }
+        }
+        require __DIR__ . '/../views/admin_login.php';
+    }
+}
+?>

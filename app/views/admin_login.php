@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connexion | Système de Gestion des Utilisateurs</title>
-    <meta name="description" content="Système de Gestion des Utilisateurs - Page de Connexion">
+    <title>Connexion Admin | Système de Gestion des Utilisateurs</title>
+    <meta name="description" content="Système de Gestion des Utilisateurs - Page de Connexion Admin">
     <meta name="author" content="Lovable">
 
     <!-- Tailwind CSS CDN -->
@@ -71,7 +71,7 @@
         <nav>
           <ul class="flex space-x-6">
             <li><a href="/" class="text-gray-600 hover:text-gray-800">Accueil</a></li>
-            <li><a href="/login" class="text-blue-600 hover:text-blue-800 font-medium">Connexion</a></li>
+            <li><a href="/login" class="text-gray-600 hover:text-gray-800">Connexion</a></li>
             <li><a href="/register" class="text-gray-600 hover:text-gray-800">Inscription</a></li>
             <li><a href="/dashboard" class="text-gray-600 hover:text-gray-800">Tableau de bord</a></li>
           </ul>
@@ -82,48 +82,52 @@
     <!-- Main Content -->
     <main class="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
       <div class="bg-white rounded-lg shadow-soft w-full max-w-md p-8 border border-gray-200">
-        <h2 class="text-2xl font-semibold text-gray-900 mb-6 text-center">Connexion à votre compte</h2>
+        <div class="flex justify-center mb-6">
+          <span class="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium">Réservé aux Admins</span>
+        </div>
         
-        <form id="loginForm" action="/login" method="POST" class="space-y-6">
+        <h2 class="text-2xl font-semibold text-gray-900 mb-6 text-center">Connexion Admin</h2>
+        
+        <form id="adminLoginForm" action="/admin-login" method="POST" class="space-y-6">
           <input type="hidden" name="csrf_token" value="<?php echo Security::generateCSRFToken(); ?>">
           <div class="space-y-2">
-            <label for="username" class="block text-sm font-medium text-gray-700">Nom d’utilisateur</label>
+            <label for="username" class="block text-sm font-medium text-gray-700">Nom d’utilisateur Admin</label>
             <input 
               type="text" 
               id="username" 
               name="username" 
               required 
               class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              placeholder="Entrez votre nom d’utilisateur"
+              placeholder="Entrez votre nom d’utilisateur admin"
             >
           </div>
           
           <div class="space-y-2">
-            <label for="password" class="block text-sm font-medium text-gray-700">Mot de passe</label>
+            <label for="password" class="block text-sm font-medium text-gray-700">Mot de passe Admin</label>
             <input 
               type="password" 
               id="password" 
               name="password" 
               required 
               class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              placeholder="Entrez votre mot de passe"
+              placeholder="Entrez votre mot de passe admin"
             >
           </div>
           
           <div>
             <button 
               type="submit" 
-              class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              class="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
             >
-              Se connecter
+              Connexion Admin
             </button>
           </div>
         </form>
         
         <div class="mt-6 text-center">
           <p class="text-sm text-gray-600">
-            Pas de compte ? 
-            <a href="/register" class="text-blue-500 hover:text-blue-600 font-medium">Inscrivez-vous</a>
+            Utilisateur normal ? 
+            <a href="/login" class="text-blue-500 hover:text-blue-600 font-medium">Connexion Utilisateur</a>
           </p>
         </div>
       </div>
@@ -168,19 +172,19 @@
       <?php endif; ?>
 
       // Form validation
-      function validateLoginForm(e) {
+      function validateAdminLoginForm(e) {
         const usernameInput = document.getElementById('username');
         const passwordInput = document.getElementById('password');
         
         if (usernameInput.value.trim() === '') {
           e.preventDefault();
-          showToast('Le nom d’utilisateur ne peut pas être vide', 'error');
+          showToast('Le nom d’utilisateur admin ne peut pas être vide', 'error');
           return false;
         }
         
         if (passwordInput.value.trim() === '') {
           e.preventDefault();
-          showToast('Le mot de passe ne peut pas être vide', 'error');
+          showToast('Le mot de passe admin ne peut pas être vide', 'error');
           return false;
         }
         
@@ -189,9 +193,9 @@
 
       // Initialize on page load
       document.addEventListener('DOMContentLoaded', () => {
-        const loginForm = document.getElementById('loginForm');
-        if (loginForm) {
-          loginForm.addEventListener('submit', validateLoginForm);
+        const adminLoginForm = document.getElementById('adminLoginForm');
+        if (adminLoginForm) {
+          adminLoginForm.addEventListener('submit', validateAdminLoginForm);
         }
       });
     </script>

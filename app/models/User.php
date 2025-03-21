@@ -15,18 +15,24 @@ class User {
 
         $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
         $stmt = $this->pdo->prepare(
-            "INSERT INTO users (username, email, password, role_id) 
-             VALUES (:username, :email, :password, :role_id)"
+            "INSERT INTO users (username, email, password, role_id, status) 
+             VALUES (:username, :email, :password, :role_id, 'inactive')"
         );
         $result = $stmt->execute([
             'username' => $username,
             'email' => $email,
             'password' => $hashedPassword,
-            'role_id' => 2
+            'role_id' => 2 // Client par défaut
         ]);
 
         if ($result) {
-            return ['success' => true, 'message' => "Inscription réussie !"];
+            $userId = $this->pdo->lastInsertId();
+            $twofaResult = $this->generate2FACode($userId);
+            if ($twofaResult['success']) {
+                return ['success' => true, 'message' => "Inscription réussie, veuillez vérifier votre code 2FA.", 'user_id' => $userId];
+            } else {
+                return ['success' => false, 'message' => "Erreur lors de la génération du code 2FA."];
+            }
         } else {
             return ['success' => false, 'message' => "Erreur lors de l'inscription."];
         }
@@ -39,7 +45,7 @@ class User {
 
         if ($user && password_verify($password, $user['password'])) {
             if ($user['status'] === 'inactive') {
-                return ['success' => false, 'message' => "Votre compte est désactivé."];
+                return ['success' => false, 'message' => "Votre compte n'est pas encore activé. Vérifiez votre code 2FA."];
             }
             return ['success' => true, 'user' => $user];
         } else {
@@ -47,13 +53,10 @@ class User {
         }
     }
 
-    // Nouvelle fonction : générer un code 2FA temporaire
     public function generate2FACode($userId) {
-        // Générer un code aléatoire de 6 chiffres
         $code = rand(100000, 999999);
-        $expires = time() + 300; // Expire dans 5 minutes
+        $expires = time() + 300; // 5 minutes
 
-        // Stocker le code dans twofa_secret avec l'expiration
         $stmt = $this->pdo->prepare(
             "UPDATE users SET twofa_secret = :code WHERE id = :id"
         );
@@ -66,7 +69,6 @@ class User {
         }
     }
 
-    // Nouvelle fonction : vérifier le code 2FA
     public function verify2FACode($userId, $code) {
         $stmt = $this->pdo->prepare("SELECT twofa_secret FROM users WHERE id = :id");
         $stmt->execute(['id' => $userId]);
@@ -76,15 +78,19 @@ class User {
             return ['success' => false, 'message' => "Aucun code 2FA généré."];
         }
 
-        // Séparer le code et l'expiration (stockés comme "code|expiration")
         list($storedCode, $expires) = explode('|', $secret);
 
         if (time() > $expires) {
-            return ['success' => false, 'message' => "Le code 2FA a expiré."];
+            // Régénérer un nouveau code si expiré
+            $newCodeResult = $this->generate2FACode($userId);
+            if ($newCodeResult['success']) {
+                return ['success' => false, 'message' => "Le code 2FA a expiré. Un nouveau code a été généré.", 'new_code' => $newCodeResult['code']];
+            } else {
+                return ['success' => false, 'message' => "Erreur lors de la régénération du code 2FA."];
+            }
         }
 
         if ($storedCode === $code) {
-            // Effacer le code après vérification réussie
             $this->pdo->prepare("UPDATE users SET twofa_secret = NULL WHERE id = :id")
                       ->execute(['id' => $userId]);
             return ['success' => true, 'message' => "Code 2FA valide."];
@@ -92,4 +98,15 @@ class User {
             return ['success' => false, 'message' => "Code 2FA incorrect."];
         }
     }
-}?>
+
+    public function activateAccount($userId) {
+        $stmt = $this->pdo->prepare("UPDATE users SET status = 'active' WHERE id = :id");
+        $result = $stmt->execute(['id' => $userId]);
+        if ($result) {
+            return ['success' => true, 'message' => "Compte activé avec succès."];
+        } else {
+            return ['success' => false, 'message' => "Erreur lors de l'activation du compte."];
+        }
+    }
+}
+?>
