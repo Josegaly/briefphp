@@ -73,6 +73,7 @@
             <li><a href="/" class="text-gray-600 hover:text-gray-800">Accueil</a></li>
             <li><a href="/login" class="text-blue-600 hover:text-blue-800 font-medium">Connexion</a></li>
             <li><a href="/register" class="text-gray-600 hover:text-gray-800">Inscription</a></li>
+            <li><a href="/admin-login" class="text-gray-600 hover:text-gray-800">L'Adminictration</a></li>
             <li><a href="/dashboard" class="text-gray-600 hover:text-gray-800">Tableau de bord</a></li>
           </ul>
         </nav>
