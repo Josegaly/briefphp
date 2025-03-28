@@ -54,6 +54,7 @@
         <h2 class="text-xl font-semibold text-gray-800">Tableau de bord Admin</h2>
         <div class="flex items-center space-x-6">
           <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">Tableau de bord Admin</span>
+          <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">Ajout d'un role</span>
           <nav>
             <ul class="flex space-x-6">
               <li><a href="/logout" class="text-red-600 hover:text-red-800">Déconnexion</a></li>
